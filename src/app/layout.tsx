@@ -26,7 +26,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </h1>
               <span className="hidden text-sm text-zinc-500 sm:inline">your personal web crypt 🪦</span>
             </div>
-            <CaptureModeToggle mode={captureMode} />
+            <div className="flex items-center gap-4">
+              <CaptureModeToggle mode={captureMode} />
+              <Link
+                href="/settings"
+                className="text-xs text-zinc-500 transition hover:text-zinc-300"
+              >
+                ⚙ settings
+              </Link>
+            </div>
           </header>
           {children}
         </div>
