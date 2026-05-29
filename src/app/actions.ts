@@ -20,6 +20,12 @@ import { steelConfigured } from "@/lib/config";
 import { normalizeUrl } from "@/lib/url";
 import { isSchedule } from "@/lib/schedule";
 import { setCaptureMode } from "@/lib/settings";
+import {
+  nukeArchive,
+  removeFailedSnapshots,
+  pruneOrphanBlobs,
+  vacuumDatabase,
+} from "@/lib/maintenance";
 
 export async function addUrlAction(formData: FormData): Promise<void> {
   if (!steelConfigured()) {
@@ -84,6 +90,28 @@ export async function setCaptureModeAction(formData: FormData): Promise<void> {
   if (mode !== "basic" && mode !== "advanced") return;
   setCaptureMode(mode);
   revalidatePath("/", "layout");
+}
+
+export async function cleanFailedAction(): Promise<void> {
+  removeFailedSnapshots();
+  revalidatePath("/", "layout");
+  revalidatePath("/settings");
+}
+
+export async function pruneBlobsAction(): Promise<void> {
+  pruneOrphanBlobs();
+  revalidatePath("/settings");
+}
+
+export async function vacuumAction(): Promise<void> {
+  vacuumDatabase();
+  revalidatePath("/settings");
+}
+
+export async function nukeArchiveAction(): Promise<void> {
+  nukeArchive();
+  revalidatePath("/", "layout");
+  revalidatePath("/settings");
 }
 
 export async function deleteAction(formData: FormData): Promise<void> {
