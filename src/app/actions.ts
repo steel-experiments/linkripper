@@ -6,11 +6,20 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { pages, snapshots } from "@/db/schema";
-import { enqueueUrl, retrySnapshot, createSnapshot, setSchedule, reorderPages } from "@/lib/archive";
+import {
+  enqueueUrl,
+  retrySnapshot,
+  createSnapshot,
+  setSchedule,
+  reorderPages,
+  promoteSnapshot,
+  deleteSnapshot,
+} from "@/lib/archive";
 import { removePageBlobs } from "@/lib/storage";
 import { steelConfigured } from "@/lib/config";
 import { normalizeUrl } from "@/lib/url";
 import { isSchedule } from "@/lib/schedule";
+import { setCaptureMode } from "@/lib/settings";
 
 export async function addUrlAction(formData: FormData): Promise<void> {
   if (!steelConfigured()) {
@@ -50,6 +59,31 @@ export async function retryAction(formData: FormData): Promise<void> {
   if (!snapshotId) return;
   retrySnapshot(snapshotId);
   revalidatePath("/");
+}
+
+export async function promoteSnapshotAction(formData: FormData): Promise<void> {
+  const snapshotId = String(formData.get("snapshotId") ?? "");
+  const pageId = String(formData.get("pageId") ?? "");
+  if (!snapshotId) return;
+  promoteSnapshot(snapshotId);
+  revalidatePath("/");
+  if (pageId) revalidatePath(`/archive/${pageId}`);
+}
+
+export async function deleteSnapshotAction(formData: FormData): Promise<void> {
+  const snapshotId = String(formData.get("snapshotId") ?? "");
+  const pageId = String(formData.get("pageId") ?? "");
+  if (!snapshotId) return;
+  deleteSnapshot(snapshotId);
+  revalidatePath("/");
+  if (pageId) revalidatePath(`/archive/${pageId}`);
+}
+
+export async function setCaptureModeAction(formData: FormData): Promise<void> {
+  const mode = String(formData.get("mode") ?? "");
+  if (mode !== "basic" && mode !== "advanced") return;
+  setCaptureMode(mode);
+  revalidatePath("/", "layout");
 }
 
 export async function deleteAction(formData: FormData): Promise<void> {

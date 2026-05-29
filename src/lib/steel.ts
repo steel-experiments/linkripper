@@ -134,23 +134,53 @@ async function waitForCaptchaCleared(sessionId: string, timeoutMs = 60000, pollM
 }
 
 // Scroll the whole page in steps to trigger scroll-lazy (IntersectionObserver /
-// loading="lazy") images, then return to the top so the screenshot starts clean.
+// loading="lazy") images, then wait for them to decode and return to the top so
+// the screenshot starts clean. Re-measures height each step because lazy content
+// grows the page, and reads documentElement (not just body) so SPA layouts whose
+// scroll height lives on <html> are handled correctly.
+// The body is passed as a source string (not a function) so no bundler helper
+// injection (esbuild's `__name`, etc.) leaks into the page context, which would
+// throw "__name is not defined" when the function is serialized for evaluate.
+const AUTO_SCROLL_SCRIPT = `(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const docHeight = () => Math.max(
+    document.body.scrollHeight, document.documentElement.scrollHeight,
+    document.body.offsetHeight, document.documentElement.offsetHeight
+  );
+  // Small steps with generous dwell give IntersectionObserver-based lazy loaders
+  // time to actually fire and fetch as each section passes through the viewport.
+  const step = Math.max(300, Math.floor(window.innerHeight * 0.5));
+  let lastHeight = 0, stable = 0;
+  // Pass 1: scroll to the bottom (re-measuring, since lazy content grows the page).
+  for (let i = 0; i < 400; i++) {
+    window.scrollBy(0, step);
+    await sleep(400);
+    const h = docHeight();
+    if (h === lastHeight) stable++; else { stable = 0; lastHeight = h; }
+    if (window.scrollY + window.innerHeight >= h - 2 && stable >= 2) break;
+  }
+  await sleep(800);
+  // Pass 2: scroll back up in steps so loaders keyed on upward intersection also
+  // fire, giving every section a second chance to load.
+  for (let y = docHeight(); y > 0; y -= step) {
+    window.scrollTo(0, y);
+    await sleep(150);
+  }
+  window.scrollTo(0, 0);
+  await sleep(400);
+  // Best-effort: wait for images to finish decoding (capped at 10s).
+  const imgs = Array.from(document.images);
+  await Promise.race([
+    Promise.all(imgs.map((img) => img.complete ? Promise.resolve() : new Promise((res) => {
+      img.addEventListener('load', () => res(), { once: true });
+      img.addEventListener('error', () => res(), { once: true });
+    }))),
+    sleep(10000),
+  ]);
+})()`;
+
 async function autoScroll(page: import("puppeteer-core").Page): Promise<void> {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      let total = 0;
-      const step = 600;
-      const timer = setInterval(() => {
-        window.scrollBy(0, step);
-        total += step;
-        if (total >= document.body.scrollHeight) {
-          clearInterval(timer);
-          resolve();
-        }
-      }, 150);
-    });
-    window.scrollTo(0, 0);
-  });
+  await page.evaluate(AUTO_SCROLL_SCRIPT);
 }
 
 // Escalated path — a real session with stealth + captcha solving, driven over
@@ -171,9 +201,12 @@ async function captureViaSession(url: string): Promise<CapturedPage> {
 
   try {
     const page = await browser.newPage();
+    // Mark the page visible — many lazy-loaders gate on document visibility, which
+    // a CDP-driven tab can otherwise report as "hidden", suppressing the loads.
+    await page.bringToFront().catch(() => {});
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    // Let Steel resolve Turnstile, then scroll to load lazy images and settle.
+    // Let Steel resolve Turnstile, then scroll to trigger lazy loads and settle.
     await waitForCaptchaCleared(session.id);
     await autoScroll(page);
     await page.waitForNetworkIdle({ idleTime: 1000, timeout: 30000 }).catch(() => {});
@@ -208,10 +241,19 @@ async function captureViaSession(url: string): Promise<CapturedPage> {
   }
 }
 
-// Capture everything we archive for a URL. When scroll-capture is enabled, every
-// page goes through the auto-scrolling session path; otherwise we take the fast
-// one-shot and only escalate to a session when a Cloudflare challenge appears.
-export async function capturePage(url: string): Promise<CapturedPage> {
+// Capture everything we archive for a URL.
+//
+// "basic"    — Steel one-shot only (scrape + screenshot). No challenge escalation,
+//              no scrolling, no visibility fix. This is the naive baseline used to
+//              demonstrate, by contrast, what Steel's advanced powers add.
+// "advanced" — full pipeline: escalate to a solveCaptcha session (always, when
+//              scroll-capture is forced, or when a Cloudflare challenge is detected)
+//              that auto-scrolls and marks the page visible to load everything.
+export async function capturePage(
+  url: string,
+  mode: "basic" | "advanced" = "advanced",
+): Promise<CapturedPage> {
+  if (mode === "basic") return captureOneShot(url);
   if (config.steel.scrollCapture) return captureViaSession(url);
   const result = await captureOneShot(url);
   if (looksLikeChallenge(result.html, result.metadata.title, result.metadata.statusCode)) {

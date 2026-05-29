@@ -10,6 +10,16 @@ export type CaptureStatus = "pending" | "processing" | "done" | "failed";
 // Recurring re-capture cadence for a page.
 export type Schedule = "off" | "hourly" | "every6h" | "daily" | "weekly";
 
+// Capture pipeline mode. "basic" = Steel one-shot only (the naive baseline);
+// "advanced" = full session powers (solveCaptcha, stealth, scroll, visibility).
+export type CaptureMode = "basic" | "advanced";
+
+// Simple key/value app settings (currently just the global capture mode).
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
 export const pages = sqliteTable("pages", {
   id: text("id").primaryKey(),
   url: text("url").notNull(),
@@ -53,6 +63,9 @@ export const snapshots = sqliteTable("snapshots", {
 
   status: text("status").$type<CaptureStatus>().notNull().default("pending"),
   error: text("error"),
+
+  // Which capture pipeline produced this snapshot (for the demo badge).
+  captureMode: text("capture_mode").$type<CaptureMode>(),
 
   // Per-capture metadata (a page's title/desc can change between snapshots).
   title: text("title"),

@@ -7,8 +7,8 @@ import { readArtifact, hasArtifact } from "@/lib/storage";
 import { relativeTime, STATUS_LABEL, STATUS_CLASS } from "@/lib/format";
 import { PageActions } from "@/components/PageActions";
 import { ScheduleSelect } from "@/components/ScheduleSelect";
-import { Thumbnail } from "@/components/Thumbnail";
 import { CopyMarkdownButton } from "@/components/CopyMarkdownButton";
+import { SnapshotCard } from "@/components/SnapshotCard";
 
 export const dynamic = "force-dynamic";
 
@@ -93,33 +93,24 @@ export default async function ArchiveDetail({
 
       {snaps.length > 1 && (
         <section>
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">History</h3>
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            History <span className="font-normal normal-case text-zinc-600">— click a capture to view, set as default, or delete</span>
+          </h3>
           <div className="flex gap-3 overflow-x-auto pb-2">
-            {snaps.map((snap) => {
-              const isSelected = selected?.id === snap.id;
-              return (
-                <Link
-                  key={snap.id}
-                  href={`/archive/${page.id}?s=${snap.id}`}
-                  className={`shrink-0 overflow-hidden rounded-md border ${isSelected ? "border-accent" : "border-ink-600"}`}
-                >
-                  <div className="h-20 w-32 bg-ink-700">
-                    {snap.status === "done" && snap.thumbhash ? (
-                      <Thumbnail id={snap.id} thumbhash={snap.thumbhash} title="" className="h-full w-full" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${STATUS_CLASS[snap.status]}`}>
-                          {STATUS_LABEL[snap.status]}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="px-2 py-1 text-[11px] text-zinc-400">
-                    {relativeTime(snap.capturedAt ?? snap.createdAt)}
-                  </div>
-                </Link>
-              );
-            })}
+            {snaps.map((snap) => (
+              <SnapshotCard
+                key={snap.id}
+                id={snap.id}
+                pageId={page.id}
+                status={snap.status}
+                thumbhash={snap.thumbhash}
+                timeLabel={relativeTime(snap.capturedAt ?? snap.createdAt)}
+                captureMode={snap.captureMode}
+                isDefault={snap.id === page.latestSnapshotId}
+                isViewing={selected?.id === snap.id}
+                viewHref={`/archive/${page.id}?s=${snap.id}`}
+              />
+            ))}
           </div>
         </section>
       )}

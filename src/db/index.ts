@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS snapshots (
   captured_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_snapshots_page ON snapshots (page_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
 // Add columns introduced after a DB was first created. SQLite's `ALTER TABLE
@@ -63,6 +68,11 @@ function migrate(sqlite: Database.Database) {
     sqlite.exec("ALTER TABLE pages ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
     // Seed existing rows so their current (created_at) order is preserved.
     sqlite.exec("UPDATE pages SET sort_order = created_at WHERE sort_order = 0");
+  }
+
+  const snapCols = sqlite.prepare("PRAGMA table_info(snapshots)").all() as { name: string }[];
+  if (!snapCols.some((c) => c.name === "capture_mode")) {
+    sqlite.exec("ALTER TABLE snapshots ADD COLUMN capture_mode TEXT");
   }
 }
 
