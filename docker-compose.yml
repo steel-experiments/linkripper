@@ -1,0 +1,31 @@
+# ABOUTME: Self-hosting stack for LINKRIPPER — the app plus a self-hosted
+# ABOUTME: steel-browser, so archiving runs fully on your own machine.
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Talk to the bundled self-hosted steel-browser (no API key needed).
+      STEEL_BASE_URL: http://steel:3000
+      DATA_DIR: /data
+      DATABASE_PATH: /data/linkripper.db
+    volumes:
+      - ./data:/data
+    depends_on:
+      - steel
+    networks: [linkripper]
+
+  # Self-hosted Steel browser engine. Captures pages with a real Chromium.
+  steel:
+    image: ghcr.io/steel-dev/steel-browser:latest
+    ports:
+      - "3001:3000" # Steel API/UI, remapped so it doesn't clash with the app
+      - "9223:9223" # Chrome DevTools Protocol
+    volumes:
+      - ./data/steel-cache:/app/.cache
+    networks: [linkripper]
+
+networks:
+  linkripper:
+    driver: bridge

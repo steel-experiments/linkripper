@@ -1,0 +1,17 @@
+/* ABOUTME: Global stylesheet — Tailwind layers plus a few base element styles. */
+/* ABOUTME: Dark-first theme for the LINKRIPPER archive UI. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink-900 text-zinc-200 antialiased;
+}
+
+a {
+  @apply text-zinc-200;
+}
